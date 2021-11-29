@@ -61,7 +61,7 @@ from .postprocessor import (
     MetadataParserPP,
 )
 from .YoutubeDL import YoutubeDL
-from service import WebSocketService
+from .service import WebSocketService
 
 
 def _real_main(client, nonce, argv=None):

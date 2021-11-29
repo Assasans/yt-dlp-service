@@ -506,7 +506,7 @@ class YoutubeDL(object):
     _playlist_urls = set()
     _screen_file = None
 
-    def __init__(self, client, nonce, params=None, auto_init=True):
+    def __init__(self, client=None, nonce=None, params=None, auto_init=True):
         """Create a FileDownloader object with the given options.
         @param auto_init    Whether to load the default extractors and print header (if verbose).
                             Set to 'no_verbose_header' to not print the header
@@ -752,21 +752,22 @@ class YoutubeDL(object):
                 return
             self._printed_messages.add(message)
 
-        packet = {
-            'nonce': self.nonce,
-            'action': 2,
-            'data': {
-                'name': out.name,
-                'data': message
+        if self.client != None:
+            packet = {
+                'nonce': self.nonce,
+                'action': 2,
+                'data': {
+                    'name': out.name,
+                    'data': message
+                }
             }
-        }
-        serialized = json.dumps(packet)
+            serialized = json.dumps(packet)
 
-        asyncio.create_task(self.client.send(serialized))
-        print(f'Sent: [nonce: {self.nonce}, action: 2, data: [ name: {out.name}, data: ... ] ]')
-        # print(f'Sent: {serialized}')
-
-        # write_string(message, out=out, encoding=self.params.get('encoding'))
+            asyncio.create_task(self.client.send(serialized))
+            print(f'Sent: [nonce: {self.nonce}, action: 2, data: [ name: {out.name}, data: ... ] ]')
+            # print(f'Sent: {serialized}')
+        else:
+            write_string(message, out=out, encoding=self.params.get('encoding'))
 
     def to_stdout(self, message, skip_eol=False, quiet=False):
         """Print message to stdout"""
