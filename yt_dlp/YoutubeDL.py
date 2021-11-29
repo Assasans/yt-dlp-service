@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import, unicode_literals
 
+import asyncio
 import collections
 import contextlib
 import copy
@@ -505,11 +506,15 @@ class YoutubeDL(object):
     _playlist_urls = set()
     _screen_file = None
 
-    def __init__(self, params=None, auto_init=True):
+    def __init__(self, client, nonce, params=None, auto_init=True):
         """Create a FileDownloader object with the given options.
         @param auto_init    Whether to load the default extractors and print header (if verbose).
                             Set to 'no_verbose_header' to not print the header
         """
+
+        self.client = client
+        self.nonce = nonce
+
         if params is None:
             params = {}
         self._ies = {}
@@ -746,7 +751,22 @@ class YoutubeDL(object):
             if message in self._printed_messages:
                 return
             self._printed_messages.add(message)
-        write_string(message, out=out, encoding=self.params.get('encoding'))
+
+        packet = {
+            'nonce': self.nonce,
+            'action': 2,
+            'data': {
+                'name': out.name,
+                'data': message
+            }
+        }
+        serialized = json.dumps(packet)
+
+        asyncio.create_task(self.client.send(serialized))
+        print(f'Sent: [nonce: {self.nonce}, action: 2, data: [ name: {out.name}, data: ... ] ]')
+        # print(f'Sent: {serialized}')
+
+        # write_string(message, out=out, encoding=self.params.get('encoding'))
 
     def to_stdout(self, message, skip_eol=False, quiet=False):
         """Print message to stdout"""

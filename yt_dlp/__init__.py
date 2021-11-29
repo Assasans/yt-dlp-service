@@ -5,6 +5,7 @@ f'You are using an unsupported version of Python. Only Python versions 3.6 and a
 
 __license__ = 'Public Domain'
 
+import asyncio
 import codecs
 import io
 import itertools
@@ -60,9 +61,10 @@ from .postprocessor import (
     MetadataParserPP,
 )
 from .YoutubeDL import YoutubeDL
+from service import WebSocketService
 
 
-def _real_main(argv=None):
+def _real_main(client, nonce, argv=None):
     # Compatibility fixes for Windows
     if sys.platform == 'win32':
         # https://github.com/ytdl-org/youtube-dl/issues/820
@@ -89,7 +91,7 @@ def _real_main(argv=None):
     # Dump user agent
     if opts.dump_user_agent:
         write_string(std_headers['User-Agent'] + '\n', out=sys.stdout)
-        sys.exit(0)
+        # sys.exit(0)
 
     # Batch file verification
     batch_urls = []
@@ -105,7 +107,8 @@ def _real_main(argv=None):
             if opts.verbose:
                 write_string('[debug] Batch file urls: ' + repr(batch_urls) + '\n')
         except IOError:
-            sys.exit('ERROR: batch file %s could not be read' % opts.batchfile)
+            write_string('ERROR: batch file %s could not be read' % opts.batchfile)
+            # sys.exit('ERROR: batch file %s could not be read' % opts.batchfile)
     all_urls = batch_urls + [url.strip() for url in args]  # batch_urls are already striped in read_batch_urls
     _enc = preferredencoding()
     all_urls = [url.decode(_enc, 'ignore') if isinstance(url, bytes) else url for url in all_urls]
@@ -116,7 +119,7 @@ def _real_main(argv=None):
             matchedUrls = [url for url in all_urls if ie.suitable(url)]
             for mu in matchedUrls:
                 write_string('  ' + mu + '\n', out=sys.stdout)
-        sys.exit(0)
+        # sys.exit(0)
     if opts.list_extractor_descriptions:
         for ie in list_extractors(opts.age_limit):
             if not ie.working():
@@ -129,11 +132,11 @@ def _real_main(argv=None):
                 _COUNTS = ('', '5', '10', 'all')
                 desc += f'; "{ie.SEARCH_KEY}:" prefix (Example: "{ie.SEARCH_KEY}{random.choice(_COUNTS)}:{random.choice(_SEARCHES)}")'
             write_string(desc + '\n', out=sys.stdout)
-        sys.exit(0)
+        # sys.exit(0)
     if opts.ap_list_mso:
         table = [[mso_id, mso_info['name']] for mso_id, mso_info in MSO_INFO.items()]
         write_string('Supported TV Providers:\n' + render_table(['mso', 'mso name'], table) + '\n', out=sys.stdout)
-        sys.exit(0)
+        # sys.exit(0)
 
     # Conflicting, missing and erroneous options
     if opts.usenetrc and (opts.username is not None or opts.password is not None):
@@ -751,26 +754,15 @@ def _real_main(argv=None):
         'compat_opts': compat_opts,
     }
 
-    with YoutubeDL(ydl_opts) as ydl:
+    with YoutubeDL(client, nonce, ydl_opts) as ydl:
         actual_use = len(all_urls) or opts.load_info_filename
 
         # Remove cache dir
         if opts.rm_cachedir:
             ydl.cache.remove()
 
-        # Update version
-        if opts.update_self:
-            # If updater returns True, exit. Required for windows
-            if run_update(ydl):
-                if actual_use:
-                    sys.exit('ERROR: The program must exit for the update to complete')
-                sys.exit()
-
         # Maybe do nothing
         if not actual_use:
-            if opts.update_self or opts.rm_cachedir:
-                sys.exit()
-
             ydl.warn_if_short_id(sys.argv[1:] if argv is None else argv)
             parser.error(
                 'You must provide at least one URL.\n'
@@ -785,12 +777,25 @@ def _real_main(argv=None):
             ydl.to_screen('Aborting remaining downloads')
             retcode = 101
 
-    sys.exit(retcode)
+        return retcode
 
 
 def main(argv=None):
     try:
-        _real_main(argv)
+        argv = sys.argv[1:]
+
+        if not argv or len(argv) < 1:
+            sys.exit('ERROR: Missing server URL')
+
+        print(f'Server URL: {argv[0]}')
+
+        websocket_service = WebSocketService(argv[0])
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(websocket_service.run())
+
+        # asyncio.run(websocket_service.run())
+        # _real_main(argv)
     except DownloadError:
         sys.exit(1)
     except SameFileError as e:
